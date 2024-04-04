@@ -1,0 +1,21 @@
+version: '3.4'
+
+services:
+  mmdet2:
+    image: yolo_image
+    container_name: mmdetection2
+    shm_size: '6gb'
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: sleep infinity
+    volumes:
+      - ..:/home/mstveras/mmdetection-2.x
+     
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: 'all'
+            capabilities: [gpu]

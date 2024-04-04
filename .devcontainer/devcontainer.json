@@ -1,0 +1,22 @@
+
+{
+    "name": "mmdet2",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "mmdet2",
+    "workspaceFolder": "/home/mstveras/mmdetection",
+    
+    "hostRequirements": {
+        "gpu":true
+    },
+    
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance"
+            ]
+        }
+    }
+
+
+}

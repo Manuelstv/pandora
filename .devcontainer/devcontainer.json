@@ -1,22 +1,31 @@
-
 {
     "name": "mmdet2",
     "dockerComposeFile": "docker-compose.yml",
     "service": "mmdet2",
-    "workspaceFolder": "/home/mstveras/mmdetection",
+    "workspaceFolder": "/home/mstveras/mmdetection_2",
     
     "hostRequirements": {
-        "gpu":true
+        "gpu": true
     },
     
     "customizations": {
         "vscode": {
             "extensions": [
                 "ms-python.python",
-                "ms-python.vscode-pylance"
-            ]
+                "ms-python.vscode-pylance",
+                "eamodio.gitlens",
+                "vscodevim.vim",
+                "RobbOwen.synthwave-vscode"
+            ],
+            "settings": {
+                "workbench.colorTheme": "Synthwave '84"  // Ensure this setting is correct
+            }
         }
-    }
-
-
+    },
+    
+    "mounts": [
+        "source=${env:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+    ],
+    
+    "postCreateCommand": "/bin/sh /home/mstveras/mmdetection_2/.devcontainer/setup_git.sh"
 }

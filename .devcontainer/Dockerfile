@@ -34,5 +34,7 @@ RUN apt-get update \
 
 # \&& pip install --no-cache-dir -e .
 
-WORKDIR /mmdetection-2.x
+WORKDIR /mmdetection_2
 
+# Add the mmdetection_2 directory to the PYTHONPATH environment variable
+ENV PYTHONPATH=/mmdetection_2:$PYTHONPATH

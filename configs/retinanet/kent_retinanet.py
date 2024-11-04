@@ -33,7 +33,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='Sph2PobIoULoss', loss_weight=1.0)),
+        loss_bbox=dict(type='KentLoss', loss_weight=1.0)),
     train_cfg=dict(
         assigner=dict(
             iou_calculator=dict(

@@ -7,10 +7,10 @@ _base_ = [
 ]
 
 # log
-checkpoint_config = dict(interval=5)
-evaluation = dict(interval=5)
+checkpoint_config = dict(interval=25)
+evaluation = dict(interval=50)
 
-optimizer_config=dict(_delete_=True, grad_clip=dict(max_norm=5, norm_type=2))
+#optimizer_config=dict(_delete_=True, grad_clip=dict(max_norm=5, norm_type=2))
 
 log_config = dict(
     interval=1,
@@ -33,7 +33,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='Sph2PobIoULoss', loss_weight=1.0)),
+        loss_bbox=dict(type='KentLoss')),
     train_cfg=dict(
         assigner=dict(
             iou_calculator=dict(

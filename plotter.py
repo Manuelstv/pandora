@@ -123,11 +123,10 @@ def compute_kent_distribution(params: KentParams, points: NDArray) -> NDArray:
     Returns:
         Array of Kent distribution values
     """
-    def compute_normalization(kappa: float, beta: float, epsilon: float = 1e-6) -> float:
+    def compute_log_normalization(kappa: float, beta: float, epsilon: float = 1e-6) -> float:
         term1 = kappa - 2 * beta
         term2 = kappa + 2 * beta
-        denominator = (term1 * term2 + epsilon) ** (-0.5)
-        return 2 * np.pi * np.exp(kappa) * denominator
+        return np.log(2 * np.pi) + kappa -0.5* np.log(term1 * term2 + epsilon)
 
     # Compute orthonormal basis
     gamma_1 = np.array([
@@ -150,7 +149,7 @@ def compute_kent_distribution(params: KentParams, points: NDArray) -> NDArray:
     
     # Compute distribution
     dot_products = points @ Q.T
-    normalization = compute_normalization(params.kappa, params.beta)
+    normalization = compute_log_normalization(params.kappa, params.beta)
     
     return np.exp(
         params.kappa * dot_products[:, 0] + 
@@ -266,11 +265,6 @@ def process_image(
     boxes = load_coco_annotations(image_path.name, annotation_path)
     logger.info(f"Found {len(boxes)} boxes")
     
-    # Scale boxes to image dimensions
-    for box in boxes:
-        box.u00 = box.u00 / 360 * width
-        box.v00 = box.v00 / 180 * height
-    
     # Create coordinate grid
     v, u = np.mgrid[0:height:1, 0:width:1]
     points = np.vstack((u.reshape(-1), v.reshape(-1))).T
@@ -288,7 +282,10 @@ def process_image(
             [box.u00, box.v00, box.a_long, box.a_lat],
             dtype=torch.float32
         )
-        kent_params = SphBox2KentTransform()(bbox_tensor).detach().numpy()[0]
+
+        transform  = SphBox2KentTransform((height, width))
+
+        kent_params = transform(bbox_tensor).detach().numpy()[0]
         
         params = KentParams(*kent_params)
         logger.info(f"Box {i} Kent parameters: {params}")

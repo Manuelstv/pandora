@@ -1,5 +1,6 @@
 import torch
 import sys
+import numpy as np
 import pdb
 from sphdet.bbox.kent_formator import kent_me_matrix_torch, get_me_matrix_torch
 from memory_profiler import profile
@@ -90,7 +91,7 @@ def sample_from_annotation_deg(annotation, shape):
 
 
 #@profile
-def deg2kent_single(annotations, h=512, w=1024):
+def deg2kent_single(annotations, h=980, w=1960):
     """
     Converts annotations in degrees to Kent distribution parameters.
 
@@ -109,13 +110,15 @@ def deg2kent_single(annotations, h=512, w=1024):
 
     kent_params = []
     for idx, annotation in enumerate(annotations):
+        eta, alpha, psi = annotation[0]/w*2*np.pi, annotation[1]/h*np.pi, 0
+        print(eta, alpha, psi)
         Xs = sample_from_annotation_deg(annotation, (h, w))
         S_torch, xbar_torch = get_me_matrix_torch(Xs)
-        k_torch = kent_me_matrix_torch(S_torch, xbar_torch)
+        kappa, beta = kent_me_matrix_torch(S_torch, xbar_torch)
+
+        k_torch = torch.tensor([eta, alpha, psi, kappa, beta])
         
         kent_params.append(k_torch)
-        #print(f"Converted {idx + 1}/{len(annotations)} annotations.")
-    #print('Finished converting annotations to kent params')
     
     return torch.stack(kent_params)
 

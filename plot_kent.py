@@ -184,53 +184,49 @@ def main():
         box = boxes[i]
         print(f"\nProcessing box {i}: {box}")
         u00, v00, a_long, a_lat = box
+        bbox_tensor = torch.tensor([u00, v00, a_long, a_lat], dtype=torch.float32)
+        kent = transform(bbox_tensor)
+
+        eta, alpha, psi, kappa, beta = kent.detach().numpy()[0]
+        print(f"Box {i} Kent parameters:")
+        print(f"  eta (longitude): {eta:.4f}")
+        print(f"  alpha (colatitude): {alpha:.4f}")
+        print(f"  psi (rotation): {psi:.4f}")
+        print(f"  kappa: {kappa:.4f}")
+        print(f"  beta: {beta:.4f}")
+            
+        # Calculate Kent distribution
+        Q = angle2Gamma(alpha, eta, psi)
+        theta = (kappa, beta, Q)
+        kent_values = FB5(theta, X)
         
-        try:
-            # Transform box to Kent parameters
-            kent = transform(torch.tensor(box))
-            eta, alpha, psi, kappa, beta = kent.detach().numpy()[0]
-            print(f"Box {i} Kent parameters:")
-            print(f"  eta (longitude): {eta:.4f}")
-            print(f"  alpha (colatitude): {alpha:.4f}")
-            print(f"  psi (rotation): {psi:.4f}")
-            print(f"  kappa: {kappa:.4f}")
-            print(f"  beta: {beta:.4f}")
-            
-            # Calculate Kent distribution
-            Q = angle2Gamma(alpha, eta, psi)
-            theta = (kappa, beta, Q)
-            kent_values = FB5(theta, X)
-            
-            # Normalize and apply gamma correction
-            kent_norm = (kent_values - kent_values.min()) / (kent_values.max() - kent_values.min())
-            kent_gamma = np.power(kent_norm, 0.5)
-            kent_image = kent_gamma.reshape((h, w))
-            
-            # Save individual heatmap
-            color = color_map.get(classes[i], (255, 255, 255))
-            heatmap_raw = cv2.applyColorMap((kent_image * 255).astype(np.uint8), cv2.COLORMAP_HOT)
-            
-            # Blend with original image
-            heatmap = heatmap_raw.astype(np.float32) / 255.0
-            heatmap = np.clip(heatmap * 1.2, 0, 1)
-            
-            original_float = original_image.astype(np.float32) / 255.0
-            alpha = np.mean(heatmap, axis=2) * 0.5
-            alpha = np.stack([alpha] * 3, axis=2)
-            
-            blended = original_float * (1 - alpha) + heatmap * alpha
-            blended_uint8 = np.clip(blended * 255, 0, 255).astype(np.uint8)
-            
-            # Save individual Kent plot
-            cv2.imwrite(f'kent_box_{i}_class_{classes[i]}.png', blended_uint8)
-            print(f"Saved kent_box_{i}_class_{classes[i]}.png")
-            
-            # Add to combined heatmap
-            combined_heatmap += kent_image
-            
-        except Exception as e:
-            print(f"Error processing box {i}: {e}")
-            continue
+        # Normalize and apply gamma correction
+        kent_norm = (kent_values - kent_values.min()) / (kent_values.max() - kent_values.min())
+        kent_gamma = np.power(kent_norm, 0.5)
+        kent_image = kent_gamma.reshape((h, w))
+        
+        # Save individual heatmap
+        color = color_map.get(classes[i], (255, 255, 255))
+        heatmap_raw = cv2.applyColorMap((kent_image * 255).astype(np.uint8), cv2.COLORMAP_HOT)
+        
+        # Blend with original image
+        heatmap = heatmap_raw.astype(np.float32) / 255.0
+        heatmap = np.clip(heatmap * 1.2, 0, 1)
+        
+        original_float = original_image.astype(np.float32) / 255.0
+        alpha = np.mean(heatmap, axis=2) * 0.5
+        alpha = np.stack([alpha] * 3, axis=2)
+        
+        blended = original_float * (1 - alpha) + heatmap * alpha
+        blended_uint8 = np.clip(blended * 255, 0, 255).astype(np.uint8)
+        
+        # Save individual Kent plot
+        cv2.imwrite(f'kent_box_{i}_class_{classes[i]}.png', blended_uint8)
+        print(f"Saved kent_box_{i}_class_{classes[i]}.png")
+        
+        # Add to combined heatmap
+        combined_heatmap += kent_image
+
     
     print("\nGenerating combined visualization...")
     

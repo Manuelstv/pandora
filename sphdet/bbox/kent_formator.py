@@ -779,8 +779,7 @@ def kent_me_matrix_torch(S_torch: Tensor, xbar_torch: Tensor) -> Tensor:
 
     psi, alpha, eta = KentDistribution.gammas_to_spherical_coordinates(gamma1, gamma2)
 
-    #print(kappa, beta)
-    return torch.stack([psi, alpha, eta, kappa, beta])
+    return kappa, beta
 
 
 def gradient_check():

@@ -8,7 +8,7 @@ from sphdet.bbox.deg2kent_single import deg2kent_single
 class SphBox2KentTransform:
     def __init__(self):
         self.transform = _sph_box2kent_transform
-    def __call__(self, boxes, img_size=(512, 1024)):
+    def __call__(self, boxes, img_size=(960, 1980)):
         return self.transform(boxes, img_size)
     
 def _sph_box2kent_transform(boxes, img_size):

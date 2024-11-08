@@ -10,7 +10,7 @@ This module provides tools for processing 360-degree images, including:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union, Mapping
 import json
 import logging
 import numpy as np
@@ -126,7 +126,7 @@ def compute_kent_distribution(params: KentParams, points: NDArray) -> NDArray:
     def compute_log_normalization(kappa: float, beta: float, epsilon: float = 1e-6) -> float:
         term1 = kappa - 2 * beta
         term2 = kappa + 2 * beta
-        return np.log(2 * np.pi) + kappa -0.5* np.log(term1 * term2 + epsilon)
+        return np.log(2 * np.pi) + kappa-0.5* np.log(term1 * term2 + epsilon)
 
     # Compute orthonormal basis
     gamma_1 = np.array([
@@ -214,10 +214,16 @@ def create_heatmap(
     Returns:
         Blended heatmap image
     """
-    # Normalize and apply gamma correction
-    dist_norm = (distribution - distribution.min()) / (
-        distribution.max() - distribution.min()
+    # Softer normalization using percentile clipping
+    p_low, p_high = np.percentile(distribution, [0, 99])
+    dist_clip = np.clip(distribution, p_low, p_high)
+    
+    # Standard min-max normalization after clipping
+    dist_norm = (dist_clip - dist_clip.min()) / (
+        dist_clip.max() - dist_clip.min()
     )
+    
+    # Apply gamma correction
     dist_gamma = np.power(dist_norm, gamma)
     
     # Convert to heatmap
@@ -236,71 +242,114 @@ def create_heatmap(
     blended = original_float * (1 - blend_alpha) + heatmap * blend_alpha
     return np.clip(blended * 255, 0, 255).astype(np.uint8)
 
-def process_image(
-    image_path: Path,
-    annotation_path: Path,
-    target_category: int = 35,
-    output_dir: Path = Path("output")
-) -> None:
-    """
-    Process a 360-degree image and generate visualizations.
-    
-    Args:
-        image_path: Path to input image
-        annotation_path: Path to COCO annotations
-        target_category: Category ID to process
-        output_dir: Directory for output images
-    """
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Load image and annotations
+def load_image(image_path: Path) -> Tuple[NDArray, int, int]:
+    """Load image and return it with dimensions."""
     image = cv2.imread(str(image_path))
     if image is None:
         raise ValueError(f"Could not read image: {image_path}")
     
     height, width = image.shape[:2]
     logger.info(f"Processing image {image_path.name} ({width}x{height})")
+    return image, height, width
+
+def create_sphere_points(height: int, width: int) -> NDArray:
+    """Create spherical coordinate points for the entire image."""
+    v, u = np.mgrid[0:height:1, 0:width:1]
+    points = np.vstack((u.reshape(-1), v.reshape(-1))).T
+    return project_equirectangular_to_sphere(points, width, height)
+
+def process_box(
+    box: BBox, 
+    sphere_points: NDArray, 
+    image: NDArray, 
+    output_dir: Path,
+    dimensions: Tuple[int, int],
+    box_index: int
+) -> NDArray:
+    """Process a single bounding box and return its Kent distribution."""
+    height, width = dimensions
     
+    # Convert box to Kent parameters
+    bbox_tensor = torch.tensor(
+        [box.u00, box.v00, box.a_long, box.a_lat],
+        dtype=torch.float32
+    )
+    transform = SphBox2KentTransform((height, width))
+    kent_params = transform(bbox_tensor).detach().numpy()[0]
+    
+    params = KentParams(*kent_params)
+    logger.info(f"Box {box_index} Kent parameters: {params}")
+    
+    # Compute distribution
+    kent_values = compute_kent_distribution(params, sphere_points)
+    kent_image = kent_values.reshape((height, width))
+    
+    # Save individual heatmap
+    heatmap = create_heatmap(kent_image, image)
+    cv2.imwrite(
+        str(output_dir / f"kent_box_{box_index}_class_{box.category_id}.png"),
+        heatmap
+    )
+    
+    return kent_image
+
+def load_category_mapping(annotation_path: Path) -> Dict[str, int]:
+    """
+    Create a mapping of category names to category IDs.
+    
+    Args:
+        annotation_path: Path to COCO annotation file
+    
+    Returns:
+        Dictionary mapping category names to their IDs
+    """
+    with open(annotation_path, 'r') as f:
+        data = json.load(f)
+    
+    return {cat['name'].lower(): cat['id'] for cat in data['categories']}
+
+def process_image(
+    image_path: Path,
+    annotation_path: Path,
+    target_category: int =13,
+    output_dir: Path = Path("output")
+) -> None:
+    """Process a 360-degree image and generate visualizations."""
+    # Setup
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Load category mapping and resolve category ID
+    if isinstance(target_category, str):
+        category_mapping = load_category_mapping(annotation_path)
+        target_category = category_mapping.get(target_category.lower())
+        if target_category is None:
+            available_categories = ', '.join(sorted(category_mapping.keys()))
+            raise ValueError(
+                f"Category '{target_category}' not found. Available categories: {available_categories}"
+            )
+    
+    # Load data
+    image, height, width = load_image(image_path)
     boxes = load_coco_annotations(image_path.name, annotation_path)
     logger.info(f"Found {len(boxes)} boxes")
     
     # Create coordinate grid
-    v, u = np.mgrid[0:height:1, 0:width:1]
-    points = np.vstack((u.reshape(-1), v.reshape(-1))).T
-    sphere_points = project_equirectangular_to_sphere(points, width, height)
+    sphere_points = create_sphere_points(height, width)
     
-    # Process each box
+    # Process boxes
     combined_distribution = np.zeros((height, width), dtype=np.float32)
-    
     for i, box in enumerate(boxes):
         if box.category_id != target_category:
             continue
-            
-        # Convert box to Kent parameters
-        bbox_tensor = torch.tensor(
-            [box.u00, box.v00, box.a_long, box.a_lat],
-            dtype=torch.float32
+        
+        kent_image = process_box(
+            box, 
+            sphere_points, 
+            image, 
+            output_dir,
+            (height, width),
+            i
         )
-
-        transform  = SphBox2KentTransform((height, width))
-
-        kent_params = transform(bbox_tensor).detach().numpy()[0]
-        
-        params = KentParams(*kent_params)
-        logger.info(f"Box {i} Kent parameters: {params}")
-        
-        # Compute distribution
-        kent_values = compute_kent_distribution(params, sphere_points)
-        kent_image = kent_values.reshape((height, width))
-        
-        # Save individual heatmap
-        heatmap = create_heatmap(kent_image, image)
-        cv2.imwrite(
-            str(output_dir / f"kent_box_{i}_class_{box.category_id}.png"),
-            heatmap
-        )
-        
         combined_distribution += kent_image
     
     # Save combined visualization
@@ -313,9 +362,31 @@ if __name__ == "__main__":
     IMAGE_PATH = Path("datasets/360INDOOR/images/7fB4v.jpg")
     ANNOTATION_PATH = Path("datasets/360INDOOR/annotations/instances_val2017.json")
     OUTPUT_DIR = Path("output")
+
+    # Available Categories:
+    # ========================================
+    # 1. toilet              2. board               3. mirror             
+    # 4. bed                 5. potted plant        6. book              
+    # 7. clock               8. phone               9. keyboard          
+    # 10. tv                 11. fan                12. backpack          
+    # 13. light              14. refrigerator       15. bathtub           
+    # 16. wine glass         17. airconditioner     18. cabinet           
+    # 19. sofa              20. bowl               21. sink              
+    # 22. computer          23. cup                24. bottle            
+    # 25. washer            26. chair              27. picture           
+    # 28. window            29. door               30. heater            
+    # 31. fireplace         32. mouse              33. oven              
+    # 34. microwave         35. person             36. vase              
+    # 37. table       
     
     try:
-        process_image(IMAGE_PATH, ANNOTATION_PATH, output_dir=OUTPUT_DIR)
+        # Now we can use the category name directly
+        process_image(
+            IMAGE_PATH, 
+            ANNOTATION_PATH, 
+            target_category="person",  # Can use string name instead of ID
+            output_dir=OUTPUT_DIR
+        )
     except Exception as e:
         logger.error(f"Processing failed: {e}")
         raise

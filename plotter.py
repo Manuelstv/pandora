@@ -154,7 +154,7 @@ def compute_kent_distribution(params: KentParams, points: NDArray) -> NDArray:
     return np.exp(
         params.kappa * dot_products[:, 0] + 
         params.beta * (dot_products[:, 1] ** 2 - dot_products[:, 2] ** 2)
-    ) / (2 * np.pi * normalization)
+        - normalization)
 
 def load_coco_annotations(image_name: str, annotation_path: Path) -> List[BBox]:
     """

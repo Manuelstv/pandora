@@ -6,10 +6,11 @@ from sphdet.bbox.deg2kent_single import deg2kent_single
 
 
 class SphBox2KentTransform:
-    def __init__(self):
+    def __init__(self, img_size):
         self.transform = _sph_box2kent_transform
-    def __call__(self, boxes, img_size=(960, 1980)):
-        return self.transform(boxes, img_size)
+        self.img_size = img_size
+    def __call__(self, boxes):
+        return self.transform(boxes, self.img_size)
     
 def _sph_box2kent_transform(boxes, img_size):
     img_h, img_w = img_size
@@ -444,9 +445,10 @@ class KentLoss(nn.Module):
     """
     A PyTorch module for calculating the Kent loss.
     """
-    def __init__(self, loss_weight=1.0):
+    def __init__(self, img_size, loss_weight=1.0):
         super(KentLoss, self).__init__()
         self.loss_weight = loss_weight
+        self.transform = SphBox2KentTransform(img_size)
         #self.l1_loss = L1Loss(reduction='none')
     
     def forward(self, pred, target, weight=None,
@@ -467,10 +469,9 @@ class KentLoss(nn.Module):
         Returns:
             torch.Tensor: The calculated loss.
         """
-        transformer = SphBox2KentTransform()
         
-        kent_pred = transformer(pred)
-        kent_target = transformer(target)
+        kent_pred = self.transform(pred)
+        kent_target = self.transform(target)
         #print(pred, target)
         
         kent_pred.register_hook(hook_fn)
@@ -489,6 +490,6 @@ if __name__ == "__main__":
     pred = torch.tensor([0.0, 0.0, 40.0, 40.0], dtype=torch.float32, requires_grad=True)#.half()
     pred = torch.randn(432, 4, dtype=torch.float32, requires_grad=True)#$.half()
     target = torch.tensor([0.0, 0.0, 40.0, 40.0], dtype=torch.float32, requires_grad=True)#.half()
-    loss = KentLoss()(pred, target)
+    loss = KentLoss((1960, 980))(pred, target)
     loss.backward(retain_graph=True)
     print(loss)

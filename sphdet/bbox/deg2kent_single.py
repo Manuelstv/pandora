@@ -91,7 +91,7 @@ def sample_from_annotation_deg(annotation, shape):
 
 
 #@profile
-def deg2kent_single(annotations, h=980, w=1960):
+def deg2kent_single(annotations, h, w):
     """
     Converts annotations in degrees to Kent distribution parameters.
 
@@ -103,20 +103,22 @@ def deg2kent_single(annotations, h=980, w=1960):
     Returns:
         torch.Tensor: Kent distribution parameters.
     """
-    
-    
     if annotations.ndim == 1:
         annotations = annotations.unsqueeze(0)  # Convert to batch of size 1
 
     kent_params = []
     for idx, annotation in enumerate(annotations):
-        eta, alpha, psi = annotation[0]/w*2*np.pi, annotation[1]/h*np.pi, 0
-        print(eta, alpha, psi)
+        # Convert to radians while preserving gradients
+        eta = (annotation[0]/360.0) * (2*torch.pi)
+        alpha = (annotation[1]/180.0) * torch.pi
+        psi = torch.tensor(0.0, device=annotation.device, dtype=annotation.dtype)
+        
         Xs = sample_from_annotation_deg(annotation, (h, w))
         S_torch, xbar_torch = get_me_matrix_torch(Xs)
         kappa, beta = kent_me_matrix_torch(S_torch, xbar_torch)
 
-        k_torch = torch.tensor([eta, alpha, psi, kappa, beta])
+        # Stack parameters while ensuring they match the input dtype
+        k_torch = torch.stack([eta, alpha, psi, kappa, beta])
         
         kent_params.append(k_torch)
     

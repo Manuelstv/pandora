@@ -5,6 +5,9 @@ from sphdet.iou import unbiased_iou, naive_iou, sph2pob_standard_iou, sph2pob_ef
 
 class SphNMS:
     def __init__(self, iou_calculator='sph2pob_efficient'):
+
+        print(iou_calculator)
+
         if iou_calculator == 'sph2pob_efficient':
             self.iou_calculator = sph2pob_efficient_iou
         elif iou_calculator == 'unbiased_iou':

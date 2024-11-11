@@ -445,7 +445,7 @@ class KentLoss(nn.Module):
     """
     A PyTorch module for calculating the Kent loss.
     """
-    def __init__(self, img_size, loss_weight=1.0):
+    def __init__(self, img_size, loss_weight=300.0):
         super(KentLoss, self).__init__()
         self.loss_weight = loss_weight
         self.transform = SphBox2KentTransform(img_size)
@@ -472,18 +472,13 @@ class KentLoss(nn.Module):
         
         kent_pred = self.transform(pred)
         kent_target = self.transform(target)
-        #print(pred, target)
         
         kent_pred.register_hook(hook_fn)
         kent_target.register_hook(hook_fn)
         
-        # Calculate L1 loss for each parameter
-        loss = normalized_l1_loss(kent_pred, kent_target)
-        #pdb.set_trace()
-        
-        # Sum the losses across the last dimension (5 Kent parameters)
-        #loss = losses.mean(dim=-1)
-        
+        # Calculate base loss
+        loss = self.loss_weight*normalized_l1_loss(kent_pred, kent_target)
+            
         return loss
     
 if __name__ == "__main__":

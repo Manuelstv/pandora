@@ -10,6 +10,26 @@ from line_profiler import LineProfiler
 import pdb
 from sphdet.losses import SphBox2KentTransform
 
+def plot_center_point(image, eta, alpha, color, w, h, radius=5):
+    """
+    Plot the center point of a Kent distribution on equirectangular image
+    
+    Args:
+        image: Input image
+        eta: longitude parameter
+        alpha: colatitude parameter
+        color: BGR color tuple
+        w, h: image dimensions
+        radius: radius of the circle
+    """
+    # Convert spherical coordinates to image coordinates
+    u = (eta / (2 * np.pi) + 0.5) * w
+    v = (-alpha / np.pi + 0.5) * h
+    
+    center = (int(u), int(v))
+    cv2.circle(image, center, radius, color, -1)
+    return image
+
 class Rotation:
     @staticmethod
     def Rx(alpha):
@@ -59,7 +79,7 @@ def plot_bfov(image: np.ndarray, v00: float, u00: float,
 
     phi00 = (u00 - w / 2) * (2 * np.pi / w)
     theta00 = -(v00 - h / 2) * (np.pi / h)
-    r = 10
+    r = 100
     d_lat = r / (2 * np.tan(fov_lat / 2))
     d_long = r / (2 * np.tan(fov_long / 2))
 
@@ -148,19 +168,81 @@ def FB5(Theta, X):
         kappa * dot_products[:, 0] + beta * (dot_products[:, 1] ** 2 - dot_products[:, 2] ** 2)
     )
 
+def read_coco_json(image_name, annotations_file):
+    """
+    Extract all bounding boxes associated with a specific image name from COCO annotations
+    
+    Args:
+        image_name (str): The filename of the image (e.g., "000684.jpg")
+        annotations_file (str): Path to the COCO annotations JSON file
+    
+    Returns:
+        list: List of dictionaries containing bounding box info
+        Each dict contains: {
+            'category_id': int,
+            'bbox': [x, y, width, height],
+            'area': float,
+            'iscrowd': int
+        }
+    """
+    boxes = []
+    
+    with open(annotations_file, 'r') as f:
+        data = json.load(f)
+    
+    # First find the image ID for this filename
+    image_id = None
+    for img in data['images']:
+        if img['file_name'] == image_name:
+            image_id = img['id']
+            break
+            
+    if image_id is None:
+        raise ValueError(f"Image {image_name} not found in annotations")
+        
+    # Now filter annotations for this image ID
+    for ann in data['annotations']:
+        if ann['image_id'] == image_id:
+            boxes.append({
+                'category_id': ann['category_id'],
+                'bbox': ann['bbox'],
+                'area': ann['area'],
+                'iscrowd': ann['iscrowd']
+            })
+            
+    return boxes
+
 def main():
-    image = cv2.imread('datasets/360INDOOR/images/6831370124_0615cf0411_f.jpg')
+
+    image_path = "datasets/360INDOOR/images/7fB4v.jpg"
+    annotations_file = "datasets/360INDOOR/annotations/instances_val2017.json"
+    
+    # Get image name from path
+    image_name = image_path.split('/')[-1]
+    
+    # Get boxes
+    try:
+        boxes =read_coco_json(image_name, annotations_file)
+        print(f"Found {len(boxes)} boxes for image {image_name}")
+        
+        # Create list of bounding boxes
+        bbox_list = [box['bbox'] for box in boxes]
+        classes_list = [box['category_id'] for box in boxes]
+    except Exception as e:
+        print(f"Error reading annotations: {e}")
+        return
+
+    image = cv2.imread(image_path)
     if image is None:
         raise ValueError("Could not read the image file. Please check the path.")
         
-    h, w = image.shape[:2]
+    h, w, _ = image.shape
     print(f"Image dimensions: {w}x{h}")
+
+    bbox_list = [[box[0]/360*w, box[1]/180*h, box[2], box[3]] for box in bbox_list]
+    boxes = bbox_list
+    classes = classes_list
     
-    with open('mock.json', 'r') as f:
-        data = json.load(f)
-    
-    boxes = data['boxes']
-    classes = data['class']
     
     color_map = {4: (0, 0, 255), 5: (0, 255, 0), 6: (255, 0, 0), 12: (255, 255, 0), 
                  17: (0, 255, 255), 25: (255, 0, 255), 26: (128, 128, 0), 
@@ -181,6 +263,10 @@ def main():
     print(f"Processing {len(boxes)} boxes...")
     
     for i in range(len(boxes)):
+        # Skip if category is not 35
+        if classes[i] != 35:
+            continue
+            
         box = boxes[i]
         print(f"\nProcessing box {i}: {box}")
         u00, v00, a_long, a_lat = box
@@ -253,6 +339,10 @@ def main():
     # Draw BFOV circles on original image
     bfov_image = image.copy()
     for i in range(len(boxes)):
+        # Skip if category is not 35
+        if classes[i] != 35:
+            continue
+            
         box = boxes[i]
         u00, v00, a_long, a_lat = box
         a_lat = np.radians(a_lat)

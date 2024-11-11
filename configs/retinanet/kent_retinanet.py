@@ -33,12 +33,15 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='KentLoss', loss_weight=1.0)),
+        loss_bbox=dict(type='KentLoss', loss_weight = 30., img_size = (128,256))),
     train_cfg=dict(
         assigner=dict(
             iou_calculator=dict(
                 backend='sph2pob_standard_iou')),),
     test_cfg=dict(
-        nms=dict(iou_threshold=0.5),
-        iou_calculator='naive_iou',
-        box_formator='sph2pix'))
+        nms_pre=1000,
+        min_bbox_size=0,
+        score_thr=0.05,
+        nms=dict(type='nms', iou_threshold=0.5),
+        max_per_img=100,
+        iou_calculator='unbiased_iou'))

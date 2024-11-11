@@ -65,7 +65,7 @@ model = dict(
         nms=dict(type='nms', iou_threshold=0.5),
         max_per_img=100,
         iou_calculator=dict(
-                type='SphOverlaps2D',
+                type='unbiased_iou',
                 backend='xinyuan',
                 box_version=4),
         box_formator='sph2pix'))

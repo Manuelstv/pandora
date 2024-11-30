@@ -1,6 +1,7 @@
 import torch
 import sys
 import numpy as np
+import torch.nn as nn
 import pdb
 from sphdet.bbox.kent_formator import kent_me_matrix_torch, get_me_matrix_torch
 from memory_profiler import profile
@@ -89,9 +90,44 @@ def sample_from_annotation_deg(annotation, shape):
     v = h - (-alpha / torch.pi + 1. / 2.) * h
     return project_equirectangular_to_sphere(torch.vstack((u, v)).T, w, h)
 
+from mlp_kent import *
 
 #@profile
 def deg2kent_single(annotations, h, w):
+    """
+    Converts annotations in degrees to Kent distribution parameters.
+    Processes entire batch at once for better efficiency.
+
+    Args:
+        annotations (torch.Tensor): Tensor with annotation data [B, 4].
+        h (int): Height of the image.
+        w (int): Width of the image.
+
+    Returns:
+        torch.Tensor: Kent distribution parameters [B, 5].
+    """
+    if annotations.ndim == 1:
+        annotations = annotations.unsqueeze(0)  # Convert to batch of size 1
+
+    model_path = 'kent_mlp_model.pth'
+    model, scaler = load_kent_model(model_path)
+
+    # Convert to radians in batch
+    eta = (annotations[:, 0] / 360.0) * (2 * torch.pi)
+    alpha = (annotations[:, 1] / 180.0) * torch.pi
+    psi = torch.zeros_like(eta)  # Create zeros with same device and dtype
+
+    # Get kappa predictions for entire batch
+    kappa_predictions = predict_kappa(model, scaler, annotations)
+    kappa, beta = kappa_predictions[:, 0], kappa_predictions[:, 1]
+
+    # Stack all parameters into final tensor [B, 5]
+    kent_params = torch.stack([eta, alpha, psi, kappa, beta], dim=1)
+    
+    return kent_params
+
+
+def deg2kent_single_old(annotations, h, w):
     """
     Converts annotations in degrees to Kent distribution parameters.
 
@@ -106,28 +142,56 @@ def deg2kent_single(annotations, h, w):
     if annotations.ndim == 1:
         annotations = annotations.unsqueeze(0)  # Convert to batch of size 1
 
+    model_path = 'kent_mlp_model.pth'
+    model, scaler = load_kent_model(model_path)
+
     kent_params = []
     for idx, annotation in enumerate(annotations):
         # Convert to radians while preserving gradients
+        #if torch.all(torch.abs(annotation) < 1e-6):
+        #    # Return zero parameters except kappa which should be 2500000
+        #    print(annotation)
+        #    zero_params = torch.zeros(5, device=annotation.device, dtype=annotation.dtype)
+        #    zero_params[3] = 2500000.0  # Set kappa (4th parameter) to 2500000
+        #    kent_params.append(zero_params)
+        #    continue
+
         eta = (annotation[0]/360.0) * (2*torch.pi)
         alpha = (annotation[1]/180.0) * torch.pi
         psi = torch.tensor(0.0, device=annotation.device, dtype=annotation.dtype)
         
-        Xs = sample_from_annotation_deg(annotation, (h, w))
-        S_torch, xbar_torch = get_me_matrix_torch(Xs)
-        kappa, beta = kent_me_matrix_torch(S_torch, xbar_torch)
+        #Xs = sample_from_annotation_deg(annotation, (h, w))
+        #S_torch, xbar_torch = get_me_matrix_torch(Xs)
+        #kappa, beta = kent_me_matrix_torch(S_torch, xbar_torch)
 
-        # Stack parameters while ensuring they match the input dtype
+        annotation = annotation.reshape(-1, 4)
+
+        kappa_predictions = predict_kappa(model, scaler, annotation)
+        eta = eta.view(1)
+        alpha = alpha.view(1)
+        psi = psi.view(1)
+
+        kappa, beta = kappa_predictions[:,0], kappa_predictions[:,1]
+        
+        #print(f"annotation {annotation}")
+        #print(f"deg {kappa}, {beta}")
+        #print(kappa2, beta2)
+
+        #pdb.set_trace()
+        
         k_torch = torch.stack([eta, alpha, psi, kappa, beta])
         
         kent_params.append(k_torch)
     
     return torch.stack(kent_params)
 
+
 if __name__ == '__main__':
     annotations = torch.tensor([35.0, 0.0, 23.0, 20.0], dtype=torch.float32, requires_grad=True)
     
-    annotations_2 = torch.tensor([[35.0, 0.0, 23.0, 20.0], [35.0, 0.0, 23.0, 50.0], [35.0, 10.0, 23.0, 20.0]], dtype=torch.float32, requires_grad=True).half()
+    annotations_2 = torch.tensor([[180.28125, 133.03125,  5.     ,  5.    ], 
+                            [35.0, 0.0, 23.0, 50.0], 
+                            [35.0, 10.0, 23.0, 20.0]], dtype=torch.float32, requires_grad=True)
     print(annotations_2)
 
     kent = deg2kent_single(annotations_2, 480, 960)

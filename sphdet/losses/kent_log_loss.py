@@ -5,6 +5,59 @@ from mmdet.models.builder import LOSSES
 from sphdet.bbox.deg2kent_single import deg2kent_single
 
 
+
+def debug_negative_kld(kent_pred: torch.Tensor, kent_target: torch.Tensor, kld: torch.Tensor):
+    """
+    Debug function to identify which Kent distribution parameters lead to negative KLD values.
+    
+    Args:
+        kent_pred (torch.Tensor): Predicted Kent distribution parameters (eta, alpha, psi, kappa, beta)
+        kent_target (torch.Tensor): Target Kent distribution parameters (eta, alpha, psi, kappa, beta)
+        kld (torch.Tensor): The calculated KLD matrix
+    """
+    # Find indices where KLD is negative
+    negative_indices = torch.where(kld < 0)
+    
+    if len(negative_indices[0]) == 0:
+        print("No negative KLD values found.")
+        return
+    
+    print(f"\nFound {len(negative_indices[0])} negative KLD values")
+    print("\nDetailed analysis of negative KLD cases:")
+    
+    for i, j in zip(negative_indices[0], negative_indices[1]):
+        kld_value = kld[i, j]
+        
+        # Get corresponding parameters
+        pred_params = kent_pred[i]
+        target_params = kent_target[j]
+        
+        print(f"\nKLD Value: {kld_value:.6f}")
+        print("\nPredicted parameters:")
+        print(f"  eta: {pred_params[0]:.6f}")
+        print(f"  alpha: {pred_params[1]:.6f}")
+        print(f"  psi: {pred_params[2]:.6f}")
+        print(f"  kappa: {pred_params[3]:.6f}")
+        print(f"  beta: {pred_params[4]:.6f}")
+        
+        print("\nTarget parameters:")
+        print(f"  eta: {target_params[0]:.6f}")
+        print(f"  alpha: {target_params[1]:.6f}")
+        print(f"  psi: {target_params[2]:.6f}")
+        print(f"  kappa: {target_params[3]:.6f}")
+        print(f"  beta: {target_params[4]:.6f}")
+        
+        # Calculate parameter differences
+        diff = pred_params - target_params
+        print("\nParameter differences (pred - target):")
+        print(f"  eta diff: {diff[0]:.6f}")
+        print(f"  alpha diff: {diff[1]:.6f}")
+        print(f"  psi diff: {diff[2]:.6f}")
+        print(f"  kappa diff: {diff[3]:.6f}")
+        print(f"  beta diff: {diff[4]:.6f}")
+        print("-" * 50)
+
+
 class SphBox2KentTransform:
     def __init__(self, img_size):
         self.transform = _sph_box2kent_transform
@@ -91,86 +144,6 @@ def log_approximate_c(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
     check_nan_inf(log_result, "approximate_c")
     return log_result
 
-def approximate_c(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
-    """
-    Approximate the c value based on kappa and beta.
-    
-    Args:
-        kappa (torch.Tensor): The kappa values.
-        beta (torch.Tensor): The beta values.
-    
-    Returns:
-        torch.Tensor: The approximated c value.
-    """
-    epsilon = 1e-6  # Small value to avoid division by zero
-    
-    term1 = kappa - 2 * beta
-    term2 = kappa + 2 * beta
-    product = term1 * term2 + epsilon
-    
-    # Calculate in log space to avoid numerical instability
-    result = 2 * torch.pi* torch.exp(kappa)/torch.sqrt(product)
-    
-    check_nan_inf(result, "approximate_c")
-    return result
-
-def del_kappa(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
-    """
-    Calculate the derivative of kappa with respect to beta.
-    
-    Args:
-        kappa (torch.Tensor): The kappa values.
-        beta (torch.Tensor): The beta values.
-    
-    Returns:
-        torch.Tensor: The derivative of kappa.
-    """
-    epsilon = 1e-6  # Small value to avoid division by zero
-
-    numerator = -2 * torch.pi * (4 * beta**2 + kappa - kappa**2) * torch.exp(kappa)
-    denominator = (kappa - 2 * beta)**(3/2) * (kappa + 2 * beta)**(3/2) + epsilon  # Add epsilon to avoid division by zero
-    result = numerator / denominator
-    check_nan_inf(result, "del_kappa")
-    return result
-
-def del_2_kappa(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
-    """
-    Calculate the second derivative of kappa with respect to beta.
-    
-    Args:
-        kappa (torch.Tensor): The kappa values.
-        beta (torch.Tensor): The beta values.
-    
-    Returns:
-        torch.Tensor: The second derivative of kappa.
-    """
-    epsilon = 1e-6  # Small value to avoid division by zero
-
-    numerator = 2 * torch.pi * (kappa**4 - 2 * kappa**3 + (2 - 8 * beta**2) * kappa**2 + 8 * beta**2 * kappa + 16 * beta**4 + 4 * beta**2) * torch.exp(kappa)
-    denominator = (kappa - 2 * beta)**(5/2) * (kappa + 2 * beta)**(5/2) + epsilon  # Add epsilon to avoid division by zero
-    result = numerator / denominator
-    check_nan_inf(result, "del_2_kappa")
-    return result
-
-def del_beta(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
-    """
-    Calculate the derivative of beta with respect to kappa.
-    
-    Args:
-        kappa (torch.Tensor): The kappa values.
-        beta (torch.Tensor): The beta values.
-    
-    Returns:
-        torch.Tensor: The derivative of beta.
-    """
-    epsilon = 1e-6  # Small value to avoid division by zero
-
-    numerator = 8 * torch.pi * torch.exp(kappa) * beta
-    denominator = (kappa - 2 * beta)**(3/2) * (kappa + 2 * beta)**(3/2) + epsilon  # Add epsilon to avoid division by zero
-    result = numerator / denominator
-    check_nan_inf(result, "del_beta")
-    return result
-
 def expected_x(gamma_a1: torch.Tensor, c: torch.Tensor, c_k: torch.Tensor) -> torch.Tensor:
     """
     Calculate the expected value of x based on gamma and c values.
@@ -183,8 +156,7 @@ def expected_x(gamma_a1: torch.Tensor, c: torch.Tensor, c_k: torch.Tensor) -> to
     Returns:
         torch.Tensor: The expected value of x.
     """
-    epsilon = 1e-6  # Small value to avoid division by zero
-    const = (c_k / (c+epsilon)).view(-1, 1)
+    const = (torch.exp(c_k - c)).view(-1, 1)
     result = const * gamma_a1
     check_nan_inf(result, "expected_x")
     return result
@@ -203,13 +175,14 @@ def expected_xxT(kappa: torch.Tensor, beta: torch.Tensor, Q_matrix: torch.Tensor
     Returns:
         torch.Tensor: The expected value of xx^T.
     """
-    c_kk = del_2_kappa(kappa, beta)
-    c_beta = del_beta(kappa, beta)
+    c_kk = log_del_2_kappa(kappa, beta)
+    c_beta = log_del_beta(kappa, beta)
     epsilon = 1e-6  # Small value to avoid division by zero
 
-    lambda_1 = c_k / c
-    lambda_2 = (c - c_kk + c_beta) / (2 * c + epsilon)  # Add epsilon to avoid division by zero
-    lambda_3 = (c - c_kk - c_beta) / (2 * c + epsilon)  # Add epsilon to avoid division by zero
+    lambda_1 = torch.exp(c_k - c)
+    lambda_2 = 0.5*(1 - torch.exp(c_kk - c) + torch.exp(c_beta - c))
+    lambda_3= 0.5*(1 - torch.exp(c_kk - c) - torch.exp(c_beta - c))
+
 
     lambdas = torch.stack([lambda_1, lambda_2, lambda_3], dim=-1)  # Shape: [N, 3]
     lambda_matrix = torch.diag_embed(lambdas)  # Shape: [N, 3, 3]
@@ -281,7 +254,7 @@ def calculate_kappa_term(kappa_a, gamma_a1, kappa_b, gamma_b1, Ex_a):
 def log_del_kappa(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
     epsilon = 1e-6
     
-    numerator = torch.log(-2 * torch.pi) + torch.log(4 * beta**2 + kappa - kappa**2) + kappa
+    numerator = torch.log(-2 * torch.pi*(4 * beta**2 + kappa - kappa**2)) + kappa
     denominator = 1.5*torch.log(kappa - 2 * beta) + 1.5*torch.log(kappa + 2 * beta) + epsilon
     result = numerator - denominator
     
@@ -301,7 +274,7 @@ def log_del_2_kappa(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
 def log_del_beta(kappa: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
     epsilon = 1e-6
     
-    numerator = torch.log(8 * torch.pi) + (kappa) + torch.log(beta)
+    numerator = torch.log(8 * torch.pi*kappa) + torch.log(beta)
     denominator = 1.5* torch.log(kappa - 2 * beta) + 1.5*torch.log(kappa + 2 * beta) + epsilon
     result = numerator - denominator
 
@@ -366,7 +339,7 @@ def kld_matrix(kappa_a: torch.Tensor, beta_a: torch.Tensor, gamma_a1: torch.Tens
     Returns:
         torch.Tensor: The KLD matrix.
     """
-    log_term = calculate_log_term(c_b, c_a)
+    log_term = c_b-c_a
     ex_a_term = calculate_kappa_term(kappa_a, gamma_a1, kappa_b, gamma_b1, Ex_a)
     beta_a_term_1_expanded, beta_b_term_1 = calculate_beta_term(beta_a, gamma_a2, beta_b, gamma_b2, ExxT_a)
     beta_a_term_2_expanded, beta_b_term_2 = calculate_beta_term(beta_a, gamma_a3, beta_b, gamma_b3, ExxT_a)
@@ -395,9 +368,9 @@ def get_kld(kent_pred: torch.Tensor, kent_target: torch.Tensor) -> torch.Tensor:
     gamma_a1, gamma_a2, gamma_a3 = Q_matrix_a[:, :, 0], Q_matrix_a[:, :, 1], Q_matrix_a[:, :, 2]
     gamma_b1, gamma_b2, gamma_b3 = Q_matrix_b[:, :, 0], Q_matrix_b[:, :, 1], Q_matrix_b[:, :, 2]
 
-    c_a = approximate_c(kappa_a, beta_a)
-    c_b = approximate_c(kappa_b, beta_b)
-    c_ka = del_kappa(kappa_a, beta_a)
+    c_a = log_approximate_c(kappa_a, beta_a)
+    c_b = log_approximate_c(kappa_b, beta_b)
+    c_ka = log_del_kappa(kappa_a, beta_a)
 
     ExxT_a = expected_xxT(kappa_a, beta_a, Q_matrix_a, c_a, c_ka)
     Ex_a = expected_x(gamma_a1, c_a, c_ka)
@@ -406,99 +379,20 @@ def get_kld(kent_pred: torch.Tensor, kent_target: torch.Tensor) -> torch.Tensor:
     kld = kld_matrix(kappa_a, beta_a, gamma_a1, gamma_a2, gamma_a3,
                             kappa_b, beta_b, gamma_b1, gamma_b2, gamma_b3,
                             Ex_a, ExxT_a, c_a, c_b, c_ka)
-    
-    
-    pdb.set_trace()
 
     check_nan_inf(kld, "get_kld")
     return kld
 
-def soft_clamp_kent_dist(kent_dist, kappa_min=10, kappa_max=50, beta_max=23, temperature=1.0):
-    # Extract components
-    eta, alpha, psi, kappa, beta = kent_dist.unbind(-1)
-
-    # Soft clamp kappa between kappa_min and kappa_max
-    kappa_range = kappa_max - kappa_min
-    kappa_clamped = kappa_min + kappa_range * torch.sigmoid((kappa - kappa_min) / temperature)
-
-    # Soft clamp beta between 0 and min(2*kappa, beta_max)
-    max_beta = torch.minimum(0.45 * kappa_clamped, torch.full_like(kappa_clamped, beta_max))
-    beta_clamped = max_beta * torch.sigmoid(beta / temperature)
-
-    # Combine the results
-    return torch.stack([eta, alpha, psi, kappa_clamped, beta_clamped], dim=-1)
-
 def kent_loss(kent_pred: torch.Tensor, kent_target: torch.Tensor, const: float = 1.0) -> torch.Tensor:
-    kent_pred_clamped = soft_clamp_kent_dist(kent_pred)
-    kent_target_clamped = soft_clamp_kent_dist(kent_target)
 
-    #pdb.set_trace()
-    #kent_pred_clamped = kent_pred
-    #kent_target_clamped = kent_target
-
-    kld = get_kld(kent_pred, kent_target)
-    debug_negative_kld(kent_pred, kent_target, kld)
+    kld = torch.clamp(get_kld(kent_pred, kent_target), min =0)
+    #debug_negative_kld(kent_pred, kent_target, kld)
 
     check_nan_inf(kld, "kld")
     
     result = 1 - 1 / (const + torch.sqrt(kld+1e-6))
     check_nan_inf(result, "kent_loss")
     return result
-
-def hook_fn(grad):
-    #print("Gradient in backward pass:")
-    #print(grad)
-    #print("Contains NaN:", torch.isnan(grad).any())
-    #print("Contains Inf:", torch.isinf(grad).any())
-    pass
-
-from mmdet.models.losses import L1Loss
-
-import math
-def normalized_l1_loss(y_pred, y_true, scale_factor=1.0):
-    """
-    Compute normalized L1 loss for 5-tuple where:
-    - First 3 values range from -pi to pi
-    - Last 2 values range from 0 to inf
-    
-    Args:
-        y_pred: torch.Tensor of shape (n, 5) or (5,) - predicted values
-        y_true: torch.Tensor of shape (n, 5) or (5,) - true values
-        scale_factor: float - scaling factor for sigmoid normalization
-    
-    Returns:
-        torch.Tensor: normalized L1 loss
-    """
-    # Ensure inputs are 2D
-    if y_pred.dim() == 1:
-        y_pred = y_pred.unsqueeze(0)
-    if y_true.dim() == 1:
-        y_true = y_true.unsqueeze(0)
-    
-    # Split tensors into bounded and unbounded parts
-    pred_bounded = y_pred[:, :3]  # First 3 values (-pi to pi)
-    pred_unbounded = y_pred[:, 3:]  # Last 2 values (0 to inf)
-    true_bounded = y_true[:, :3]
-    true_unbounded = y_true[:, 3:]
-    
-    # Normalize bounded variables to [0,1]
-    pred_bounded_norm = (pred_bounded - (-math.pi)) / (2 * math.pi)
-    true_bounded_norm = (true_bounded - (-math.pi)) / (2 * math.pi)
-    
-    # Normalize unbounded variables using sigmoid
-    pred_unbounded_norm = torch.sigmoid(pred_unbounded / scale_factor)
-    true_unbounded_norm = torch.sigmoid(true_unbounded / scale_factor)
-    
-    # Compute L1 loss for each part
-    loss_bounded = torch.abs(pred_bounded_norm - true_bounded_norm)
-    loss_unbounded = torch.abs(pred_unbounded_norm - true_unbounded_norm)
-    
-    # Combine losses
-    total_loss = torch.cat([loss_bounded, loss_unbounded], dim=1)
-    #total_loss = loss_bounded
-    
-    # Return mean loss
-    return torch.mean(total_loss)
 
 
 @LOSSES.register_module()
@@ -510,7 +404,6 @@ class KentLoss(nn.Module):
         super(KentLoss, self).__init__()
         self.loss_weight = loss_weight
         self.transform = SphBox2KentTransform(img_size)
-        #self.l1_loss = L1Loss(reduction='none')
     
     def forward(self, pred, target, weight=None,
             avg_factor=None,
@@ -532,73 +425,13 @@ class KentLoss(nn.Module):
         """
         
         kent_target = self.transform(target) #.squeeze()
-        kent_pred = self.transform(pred) #.squeeze()
-        #kent_pred.register_hook(hook_fn)
-        #kent_target.register_hook(hook_fn)
-        #pdb.set_trace()
-        
-        # Calculate base loss
-        #loss = self.loss_weight*normalized_l1_loss(kent_pred, kent_target)
+        kent_pred = torch.clamp(self.transform(pred), min=0)  # Clamp to 0
         loss = kent_loss(kent_pred, kent_target)
             
         return loss
-
-
-def debug_negative_kld(kent_pred: torch.Tensor, kent_target: torch.Tensor, kld: torch.Tensor):
-    """
-    Debug function to identify which Kent distribution parameters lead to negative KLD values.
     
-    Args:
-        kent_pred (torch.Tensor): Predicted Kent distribution parameters (eta, alpha, psi, kappa, beta)
-        kent_target (torch.Tensor): Target Kent distribution parameters (eta, alpha, psi, kappa, beta)
-        kld (torch.Tensor): The calculated KLD matrix
-    """
-    # Find indices where KLD is negative
-    negative_indices = torch.where(kld < 0)
-    
-    if len(negative_indices[0]) == 0:
-        print("No negative KLD values found.")
-        return
-    
-    print(f"\nFound {len(negative_indices[0])} negative KLD values")
-    print("\nDetailed analysis of negative KLD cases:")
-    
-    for i, j in zip(negative_indices[0], negative_indices[1]):
-        kld_value = kld[i, j]
-        
-        # Get corresponding parameters
-        pred_params = kent_pred[i]
-        target_params = kent_target[j]
-        
-        print(f"\nKLD Value: {kld_value:.6f}")
-        print("\nPredicted parameters:")
-        print(f"  eta: {pred_params[0]:.6f}")
-        print(f"  alpha: {pred_params[1]:.6f}")
-        print(f"  psi: {pred_params[2]:.6f}")
-        print(f"  kappa: {pred_params[3]:.6f}")
-        print(f"  beta: {pred_params[4]:.6f}")
-        
-        print("\nTarget parameters:")
-        print(f"  eta: {target_params[0]:.6f}")
-        print(f"  alpha: {target_params[1]:.6f}")
-        print(f"  psi: {target_params[2]:.6f}")
-        print(f"  kappa: {target_params[3]:.6f}")
-        print(f"  beta: {target_params[4]:.6f}")
-        
-        # Calculate parameter differences
-        diff = pred_params - target_params
-        print("\nParameter differences (pred - target):")
-        print(f"  eta diff: {diff[0]:.6f}")
-        print(f"  alpha diff: {diff[1]:.6f}")
-        print(f"  psi diff: {diff[2]:.6f}")
-        print(f"  kappa diff: {diff[3]:.6f}")
-        print(f"  beta diff: {diff[4]:.6f}")
-        print("-" * 50)
-
-
 if __name__ == "__main__":
-    pred = torch.tensor([0.0, 0.0, 30.0, 30.0], dtype=torch.float32, requires_grad=True)#.half()
-    #pred = torch.randn(432, 4, dtype=torch.float32, requires_grad=True)#$.half()
+    pred = torch.tensor([1.0, -0.5, -0.1, -1.0], dtype=torch.float32, requires_grad=True)#.half()
     target = torch.tensor([0.0, 0.0, 40.0, 40.0], dtype=torch.float32, requires_grad=True)#.half()
     loss = KentLoss((1960, 980))(pred, target)
     loss.backward(retain_graph=True)

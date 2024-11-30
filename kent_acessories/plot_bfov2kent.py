@@ -99,7 +99,7 @@ def plot_bfov(image: np.ndarray, v00: float, u00: float,
     # Calculate angles and projection parameters
     phi00 = (u00 - w / 2) * (2 * np.pi / w)
     theta00 = -(v00 - h / 2) * (np.pi / h)
-    r = 10
+    r = 30
     d_lat = r / (2 * np.tan(fov_lat / 2))
     d_long = r / (2 * np.tan(fov_long / 2))
 
@@ -189,25 +189,27 @@ def FB5(Theta, X):
     )
 
 def main():
-    image = imread('datasets/360INDOOR/images/6831370124_0615cf0411_f.jpg')
+    image = imread('datasets/360INDOOR/images/7fB4v.jpg')
     h, w = image.shape[:2]
-    with open('6831370124_0615cf0411_f.json', 'r') as f:
+    with open('7fB4v.json', 'r') as f:
         data = json.load(f)
     
     boxes = data['boxes']
     classes = data['class']
     
-    color_map = {4: (0, 0, 255), 5: (0, 255, 0), 6: (255, 0, 0), 12: (255, 255, 0), 17: (0, 255, 255), 25: (255, 0, 255), 26: (128, 128, 0), 27: (0, 128, 128), 30: (128, 0, 128), 34: (128, 128, 128), 35: (64, 0, 0), 36: (0, 64, 0)}
+    color_map = {4: (0, 0, 255), 5: (0, 255, 0), 6: (255, 0, 0), 12: (255, 255, 0), 17: (0, 255, 255), 25: (255, 0, 255), 26: (128, 128, 0), 27: (0, 128, 128), 30: (128, 0, 128), 34: (0, 255,255), 35: (0, 255,255), 36: (0, 64, 0)}
     
     # Uncomment this block to profile the BFOV plotting
     
     for i in range(len(boxes)):
-        box = boxes[i]
-        u00, v00, _, _, a_lat1, a_long1, class_name = box
-        a_lat = np.radians(a_long1)
-        a_long = np.radians(a_lat1)
-        color = color_map.get(classes[i], (255, 255, 255))
-        image = plot_bfov(image, v00, u00, a_lat, a_long, color, h, w)
+        if (classes[i]==34):
+            box = boxes[i]
+            u00, v00, _, _, a_lat1, a_long1, class_name = box
+            a_lat = np.radians(a_long1)
+            a_long = np.radians(a_lat1)
+            print(classes[i])
+            color = color_map.get(classes[i], (255, 255, 255))
+            image = plot_bfov(image, v00, u00, a_lat, a_long, color, h, w)
     
     cv2.imwrite('bfov_image.png', image)
 

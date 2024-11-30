@@ -215,7 +215,8 @@ def create_heatmap(
         Blended heatmap image
     """
     # Softer normalization using percentile clipping
-    p_low, p_high = np.percentile(distribution, [0, 99])
+
+    p_low, p_high = np.percentile(distribution, [0, 97])
     dist_clip = np.clip(distribution, p_low, p_high)
     
     # Standard min-max normalization after clipping
@@ -274,9 +275,12 @@ def process_box(
         [box.u00, box.v00, box.a_long, box.a_lat],
         dtype=torch.float32
     )
+    
     transform = SphBox2KentTransform((height, width))
     kent_params = transform(bbox_tensor).detach().numpy()[0]
-    
+
+    #kent_params = np.array([3.133411407470703, 2.233476161956787, 0.0, 2.4742720127105713, 0.3991676867008209])
+
     params = KentParams(*kent_params)
     logger.info(f"Box {box_index} Kent parameters: {params}")
     
@@ -332,6 +336,8 @@ def process_image(
     image, height, width = load_image(image_path)
     boxes = load_coco_annotations(image_path.name, annotation_path)
     logger.info(f"Found {len(boxes)} boxes")
+
+    #boxes = [3.133411407470703, 2.233476161956787, 0.0, 2.4742720127105713, 0.3991676867008209]
     
     # Create coordinate grid
     sphere_points = create_sphere_points(height, width)

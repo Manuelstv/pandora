@@ -773,12 +773,6 @@ def kent_me_matrix_torch(S_torch: Tensor, xbar_torch: Tensor) -> Tensor:
     kappa = torch.max(min_kappa, 1.0 / (2.0 - 2.0 * r1 - r2) + 1.0 / (2.0 - 2.0 * r1 + r2))
     beta = 0.5 * (1.0 / (2.0 - 2.0 * r1 - r2) - 1.0 / (2.0 - 2.0 * r1 + r2))
 
-    gamma1 = G[:, 0]
-    gamma2 = G[:, 1]
-    gamma3 = G[:, 2]
-
-    psi, alpha, eta = KentDistribution.gammas_to_spherical_coordinates(gamma1, gamma2)
-
     return kappa, beta
 
 

@@ -43,7 +43,7 @@ def sample_from_annotation_deg(annotation, shape):
     a_lat = torch.deg2rad(fov_v)
     a_long = torch.deg2rad(fov_h)
 
-    r = 12
+    r = 30
     epsilon = 1e-6  # Increased epsilon for better numerical stability
     d_lat = r / (2 * torch.tan(a_lat / 2 + epsilon))
     d_long = r / (2 * torch.tan(a_long / 2 + epsilon))
@@ -125,6 +125,37 @@ def deg2kent_single(annotations, h, w):
     kent_params = torch.stack([eta, alpha, psi, kappa, beta], dim=1)
     
     return kent_params
+
+def deg2kent_sampling(annotations, h=980, w=1960):
+    """
+    Converts annotations in degrees to Kent distribution parameters.
+
+    Args:
+        annotations (torch.Tensor): Tensor with annotation data.
+        h (int): Height of the image.
+        w (int): Width of the image.
+
+    Returns:
+        torch.Tensor: Kent distribution parameters.
+    """
+    
+    
+    if annotations.ndim == 1:
+        annotations = annotations.unsqueeze(0)  # Convert to batch of size 1
+
+    kent_params = []
+    for idx, annotation in enumerate(annotations):
+        eta, alpha, psi = annotation[0]/w*2*np.pi, annotation[1]/h*np.pi, 0
+        print(eta, alpha, psi)
+        Xs = sample_from_annotation_deg(annotation, (h, w))
+        S_torch, xbar_torch = get_me_matrix_torch(Xs)
+        kappa, beta = kent_me_matrix_torch(S_torch, xbar_torch)
+
+        k_torch = torch.tensor([eta, alpha, psi, kappa, beta])
+        
+        kent_params.append(k_torch)
+    
+    return torch.stack(kent_params)
 
 
 def deg2kent_single_old(annotations, h, w):

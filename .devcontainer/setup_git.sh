@@ -12,3 +12,4 @@ pip install future tensorboard
 apt-get update
 pip install line_profiler
 pip install memory_profiler
+pip instal h5py

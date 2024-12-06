@@ -222,7 +222,7 @@ def main():
     
     # Get boxes
     try:
-        boxes =read_coco_json(image_name, annotations_file)
+        boxes = read_coco_json(image_name, annotations_file)
         print(f"Found {len(boxes)} boxes for image {image_name}")
         
         # Create list of bounding boxes
@@ -239,8 +239,25 @@ def main():
     h, w, _ = image.shape
     print(f"Image dimensions: {w}x{h}")
 
+    #bbox_list = [[box[0]/360*w, box[1]/180*h, box[2], box[3]] for box in bbox_list]
 
-    bbox_list = [[box[0]/360*w, box[1]/180*h, box[2], box[3]] for box in bbox_list]
+    data_x = np.array([[box[0]/360] for box in bbox_list])
+    data_y = np.array([[box[1]/180] for box in bbox_list])
+    data_fov_h = np.array([[box[2]]for box in bbox_list])
+    data_fov_v = np.array([[box[3]]for box in bbox_list])
+
+    phi, theta = 2 * np.pi * data_x, np.pi * data_y
+
+    varphi = np.deg2rad(data_fov_h)**2/12
+    vartheta = np.deg2rad(data_fov_v)**2/12
+
+    kappa = .5*(1/varphi+1/vartheta)
+    beta = .25*(1/vartheta-1/varphi)
+
+
+
+
+    pdb.set_trace()
     boxes = bbox_list
     classes = classes_list
     
@@ -250,7 +267,7 @@ def main():
                  27: (0, 128, 128), 30: (128, 0, 128), 34: (128, 128, 128), 
                  35: (64, 0, 0), 36: (0, 64, 0)}
     
-    transform = SphBox2KentTransform((h,w))
+    transform = SphBox2KentTransform()
     
     # Create coordinate grid once (reusable for all boxes)
     v, u = np.mgrid[0:h:1, 0:w:1]
@@ -263,12 +280,10 @@ def main():
     
     print(f"Processing {len(boxes)} boxes...")
     
-
-    kappa_list = []
     for i in range(len(boxes)):
         # Skip if category is not 35
-        #if classes[i] != 35:
-        #    continue
+        if classes[i] != 35:
+            continue
             
         box = boxes[i]
         print(f"\nProcessing box {i}: {box}")
@@ -277,9 +292,6 @@ def main():
         kent = transform(bbox_tensor)
 
         eta, alpha, psi, kappa, beta = kent.detach().numpy()[0]
-
-        kappa_list.append(kappa)
-
         print(f"Box {i} Kent parameters:")
         print(f"  eta (longitude): {eta:.4f}")
         print(f"  alpha (colatitude): {alpha:.4f}")
@@ -319,10 +331,8 @@ def main():
         # Add to combined heatmap
         combined_heatmap += kent_image
 
-    pdb.set_trace()
+    
     print("\nGenerating combined visualization...")
-
-    print(kappa_list)
     
     # Normalize and visualize combined heatmap
     combined_heatmap = (combined_heatmap - combined_heatmap.min()) / (combined_heatmap.max() - combined_heatmap.min())

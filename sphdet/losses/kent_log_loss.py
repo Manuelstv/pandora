@@ -2,7 +2,7 @@ import torch
 import pdb
 import torch.nn as nn
 from mmdet.models.builder import LOSSES
-from sphdet.bbox.deg2kent_single import deg2kent_single
+from sphdet.bbox.deg2kent_single import deg2kent_sampling
 
 
 
@@ -67,7 +67,7 @@ class SphBox2KentTransform:
     
 def _sph_box2kent_transform(boxes, img_size):
     img_h, img_w = img_size
-    return deg2kent_single(boxes, img_h, img_w)
+    return deg2kent_sampling(boxes, img_h, img_w)
 
 def check_nan_inf(tensor: torch.Tensor, name: str):
     """
@@ -212,21 +212,6 @@ def beta_gamma_exxt_gamma(beta: torch.Tensor, gamma: torch.Tensor, ExxT: torch.T
     check_nan_inf(result, "beta_gamma_exxt_gamma")
     return result
 
-def calculate_log_term(c_b, c_a):
-    """
-    Calculate the log term of the KLD matrix.
-    
-    Args:
-        c_b (torch.Tensor): The c_b values.
-        c_a (torch.Tensor): The c_a values.
-    
-    Returns:
-        torch.Tensor: The log term of the KLD matrix.
-    """
-    result = torch.log(c_b.view(-1, 1) / c_a.view(1, -1)).T
-    check_nan_inf(result, "calculate_log_term")
-    return result
-
 def calculate_kappa_term(kappa_a, gamma_a1, kappa_b, gamma_b1, Ex_a):
     """
     Calculate the kappa term of the KLD matrix.
@@ -345,6 +330,7 @@ def kld_matrix(kappa_a: torch.Tensor, beta_a: torch.Tensor, gamma_a1: torch.Tens
     beta_a_term_2_expanded, beta_b_term_2 = calculate_beta_term(beta_a, gamma_a3, beta_b, gamma_b3, ExxT_a)
     
     kld = log_term + ex_a_term+ beta_a_term_1_expanded - beta_b_term_1 - beta_a_term_2_expanded + beta_b_term_2
+    #pdb.set_trace()
     check_nan_inf(kld, "kld_matrix")
     return kld
 
@@ -386,6 +372,7 @@ def get_kld(kent_pred: torch.Tensor, kent_target: torch.Tensor) -> torch.Tensor:
 def kent_loss(kent_pred: torch.Tensor, kent_target: torch.Tensor, const: float = 1.0) -> torch.Tensor:
 
     kld = torch.clamp(get_kld(kent_pred, kent_target), min =0)
+    #kld = get_kld(kent_pred, kent_target)
     #debug_negative_kld(kent_pred, kent_target, kld)
 
     check_nan_inf(kld, "kld")

@@ -1,13 +1,3 @@
-"""
-360-degree image processing with Kent distribution visualization.
-
-This module provides tools for processing 360-degree images, including:
-- Coordinate transformations
-- Kent distribution calculations
-- Bounding box visualization
-- COCO annotation parsing
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Union, Mapping

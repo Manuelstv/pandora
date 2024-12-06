@@ -372,6 +372,8 @@ def kld_matrix(kappa_a: torch.Tensor, beta_a: torch.Tensor, gamma_a1: torch.Tens
     beta_a_term_2_expanded, beta_b_term_2 = calculate_beta_term(beta_a, gamma_a3, beta_b, gamma_b3, ExxT_a)
     
     kld = log_term + ex_a_term+ beta_a_term_1_expanded - beta_b_term_1 - beta_a_term_2_expanded + beta_b_term_2
+    
+    pdb.set_trace()
     check_nan_inf(kld, "kld_matrix")
     return kld
 

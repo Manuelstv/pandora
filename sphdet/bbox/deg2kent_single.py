@@ -126,6 +126,52 @@ def deg2kent_single(annotations, h, w):
     
     return kent_params
 
+
+def bfov_to_kent(annotations):
+    """
+    Converts bounding field of view (BFOV) annotations to Kent distribution parameters.
+
+    Args:
+        annotations (torch.Tensor): [n, 4] tensor where each row is [x, y, fov_h, fov_v].
+
+    Returns:
+        torch.Tensor: [n, 5] tensor where each row is [eta, alpha, psi, kappa, beta].
+    """
+    if annotations.ndim == 1:
+        annotations = annotations.unsqueeze(0)  # Convert to batch of size 1
+    
+    # Extract and normalize coordinates
+    data_x = annotations[:, 0] / 360.0  # Normalize x coordinate (longitude)
+    data_y = annotations[:, 1] / 180.0  # Normalize y coordinate (latitude)
+    data_fov_h = annotations[:, 2]      # Horizontal FOV (degrees)
+    data_fov_v = annotations[:, 3]      # Vertical FOV (degrees)
+    
+    # Compute angles phi and theta
+    phi = 2 * np.pi * data_x            # Azimuthal angle (longitude)
+    theta = np.pi * data_y              # Polar angle (latitude)
+    
+    # Convert FOV to radians and compute variances
+    varphi = (torch.deg2rad(data_fov_h) ** 2) / 12  # Horizontal variance
+    vartheta = (torch.deg2rad(data_fov_v) ** 2) / 12  # Vertical variance
+    
+    # Compute Kent distribution parameters
+    kappa = 0.5 * (1 / varphi + 1 / vartheta)
+    beta = 0.25 * (1 / vartheta - 1 / varphi)
+    
+    # Set angles for Kent distribution
+    eta = phi  # Azimuthal mean direction
+    alpha = theta  # Polar mean direction
+    psi = torch.zeros_like(eta)  # Default twist angle (set to 0 for simplicity)
+    
+    # Stack parameters into [n, 5] tensor
+    kent_dist = torch.stack([eta, alpha, psi, kappa, beta], dim=1)
+    
+    pdb.set_trace()
+    
+    return kent_dist
+    
+
+
 def deg2kent_sampling(annotations, h=980, w=1960):
     """
     Converts annotations in degrees to Kent distribution parameters.
